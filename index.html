@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#241d15">
+<title>POTHOLE PATROL — Save the Subaru. Patch North Ave.</title>
+<meta name="description" content="It's mud season on North Ave. Slap asphalt into erupting potholes before the Subaru Outback loses its hubcaps. A Btown Games production.">
+<meta property="og:title" content="POTHOLE PATROL">
+<meta property="og:description" content="It's mud season on North Ave. Patch the potholes before the Subaru hits one. Free browser game from the Btown Brief.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://btownbrief.github.io/pothole-patrol/">
+<meta property="og:image" content="https://btownbrief.github.io/pothole-patrol/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="game" width="480" height="820"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="badge"><small>SCORE</small><span id="score">0</span><em id="bestHud"></em></div>
+    <div class="badge"><small>WAVE</small><span id="waveNum">1</span></div>
+    <div class="badge caps"><small>HUBCAPS</small><span id="caps">🛞🛞🛞</span></div>
+  </div>
+  <div id="comboBadge" class="hidden">x2 COMBO</div>
+  <div id="toast"></div>
+  <button id="mute" aria-label="Toggle sound">🔊</button>
+
+  <!-- Title screen -->
+  <div id="start" class="panel">
+    <div class="cone">🚧</div>
+    <h1>POTHOLE<br><span>PATROL</span></h1>
+    <div class="sub">North Ave · Burlington VT · Mud Season</div>
+    <div class="howto">
+      <div class="how"><b>TAP</b> potholes to slap asphalt in 'em</div>
+      <div class="how">Fresh holes take <b>1 tap</b> — let 'em grow into craters and it's <b>2</b></div>
+      <div class="how">Guard the <b>Subaru Outback</b>: an open hole costs a hubcap 🛞</div>
+      <div class="how">Three hubcaps. Endless mud. Chain quick patches for <b>combos</b></div>
+      <div class="how bonus">🍁 syrup = points · 🚜 plow = fills everything</div>
+    </div>
+    <button class="cta" id="startBtn">START PATROL</button>
+    <div class="footer">A Btown Games production · <a href="https://www.btownbrief.com" target="_blank" rel="noopener">Read the Btown Brief →</a></div>
+  </div>
+
+  <!-- Game over -->
+  <div id="gameover" class="panel hidden">
+    <h1 class="over-h1" id="overTitle">OUT OF HUBCAPS!</h1>
+    <div class="over-sub">The Outback limps off toward the Beltline…</div>
+    <div class="score-big" id="finalScore">0</div>
+    <div class="best-line" id="bestLine">Personal best: 0</div>
+    <div class="stat-line" id="statLine"></div>
+
+    <div class="lb hidden" id="lb">
+      <div class="lb-tabs">
+        <button class="chip sel" id="lbThisBtn">🏆 This Month</button>
+        <button class="chip" id="lbLastBtn">Last Month</button>
+      </div>
+      <div class="lb-status" id="lbStatus"></div>
+      <ol id="lbList"></ol>
+      <div class="lb-form hidden" id="lbForm">
+        <input id="lbNameInput" maxlength="20" placeholder="Your name" autocomplete="off">
+        <button class="chip" id="lbSaveBtn">Save</button>
+      </div>
+      <button class="chip lb-rename" id="lbRenameBtn">✏️ Change name</button>
+    </div>
+
+    <button class="cta" id="restartBtn">CLOCK BACK IN</button>
+    <a class="brief-cta" href="https://www.btownbrief.com" target="_blank" rel="noopener">📰 While the asphalt cures — read the Btown Brief →</a>
+    <div class="footer">A Btown Games production · <a href="https://www.btownbrief.com" target="_blank" rel="noopener">Read the Btown Brief →</a></div>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
