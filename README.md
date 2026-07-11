@@ -2,7 +2,7 @@
 
 A Whac-A-Mole–style arcade game set on **North Ave in Burlington, Vermont's New
 North End** during mud season. Part of **Btown Games**, the browser arcade of the
-[Btown Brief](https://www.btownbrief.com).
+[BTown Brief](https://www.btownbrief.com).
 
 **Play it:** https://btownbrief.github.io/pothole-patrol/
 
@@ -29,4 +29,4 @@ Pushes to `main` deploy to GitHub Pages via `.github/workflows/deploy.yml`.
 
 ---
 
-A Btown Games production · [Read the Btown Brief →](https://www.btownbrief.com)
+A Btown Games production · [Read the BTown Brief →](https://www.btownbrief.com)
