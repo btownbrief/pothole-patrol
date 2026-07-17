@@ -32,17 +32,17 @@ const CRATER_POINTS = 25;
 const SYRUP_POINTS = 40;
 const PLOW_TAP_POINTS = 20;
 const PLOW_FILL_POINTS = 5;
-const WAVE_SECONDS = 20;
-const COMBO_WINDOW = 2.8;      // s between fills to keep the chain alive
+const WAVE_SECONDS = 14;
+const COMBO_WINDOW = 2.2;      // s between fills to keep the chain alive
 const MAX_MULT = 5;
 const HIT_RADIUS = 46;         // generous tap target (logical px)
 
 function waveTuning(w) {
   return {
-    spawnEvery: Math.max(1.65 * Math.pow(0.92, w - 1), 0.55),
+    spawnEvery: Math.max(1.65 * Math.pow(0.88, w - 1), 0.4),
     maxOpen: Math.min(2 + Math.floor((w - 1) / 2), 6),
-    freshLife: Math.max(4.4 - 0.28 * (w - 1), 2.1),   // s before it grows into a crater
-    carSpeed: Math.min(95 + 11 * (w - 1), 235),
+    freshLife: Math.max(3.6 - 0.28 * (w - 1), 1.5),   // s before it grows into a crater
+    carSpeed: Math.min(115 + 14 * (w - 1), 260),
     carDwell: Math.max(1.5 - 0.11 * (w - 1), 0.45),
   };
 }
@@ -205,7 +205,7 @@ function fillPothole(p, byPlow = false) {
   potholes.splice(potholes.indexOf(p), 1);
   patches.push({ x: p.x, y: p.y, r: p.stage === 'crater' ? 26 : 18, age: 0 });
   filled++;
-  burst(p.x, p.y, 12, '#1d2024', 3);
+  burst(p.x, p.y, 12 + mult * 3, '#1d2024', 3 + mult * 0.4);
   steam(p.x, p.y, p.stage === 'crater' ? 10 : 6);
   if (byPlow) {
     award(PLOW_FILL_POINTS, p.x, p.y);
@@ -214,6 +214,7 @@ function fillPothole(p, byPlow = false) {
     const pts = (p.stage === 'crater' ? CRATER_POINTS : FRESH_POINTS) * mult;
     award(pts, p.x, p.y, mult > 1 ? `x${mult}` : '');
     sfx.splat(mult);
+    shake(2 + mult * 1.5, 0.12);
   }
 }
 
@@ -307,7 +308,7 @@ function whack(x, y) {
   }
   if (bestP) {
     bestP.hp--;
-    bestP.flash = 0.18;
+    bestP.flash = 0.12;
     if (bestP.hp <= 0) {
       fillPothole(bestP);
     } else {
@@ -507,7 +508,7 @@ function draw() {
 }
 
 function drawPothole(p) {
-  const grow = Math.min(p.animT / 0.25, 1);
+  const grow = Math.min(p.animT / 0.14, 1);
   const pulse = 1 + Math.sin(time * 5 + p.slot) * 0.03;
   const r = (p.stage === 'crater' ? 27 : 17) * grow * pulse;
   const danger = car.lane >= 0 && SLOTS[p.slot].lane === car.lane &&

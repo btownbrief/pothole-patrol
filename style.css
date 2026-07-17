@@ -80,7 +80,7 @@ html, body {
   border-radius: 999px;
   z-index: 5;
   pointer-events: none;
-  animation: comboPulse 0.5s ease infinite alternate;
+  animation: comboPulse 0.35s ease infinite alternate;
 }
 @keyframes comboPulse { from { transform: translateX(-50%) scale(1); } to { transform: translateX(-50%) scale(1.08); } }
 
