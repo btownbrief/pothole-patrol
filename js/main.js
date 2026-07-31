@@ -36,6 +36,9 @@ const WAVE_SECONDS = 14;
 const COMBO_WINDOW = 2.2;      // s between fills to keep the chain alive
 const MAX_MULT = 5;
 const HIT_RADIUS = 46;         // generous tap target (logical px)
+const MAX_PARTICLES = 40;
+const CAR_WARNING_DISTANCE = 185;
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
 function waveTuning(w) {
   return {
@@ -53,6 +56,7 @@ const WAVE_TOASTS = [
   'THAW ACCELERATES', 'FULL MUD', 'TOWN MEETING CALLED',
   'ROADS "IMPASSABLE"', 'PEAK MUD', 'LEGENDARY MUD',
 ];
+const COMBO_TOASTS = ['', '', '', 'x3 · HOT PATCH!', 'x4 · ON A ROLL!', 'x5 · PAVING MACHINE!'];
 
 // ------------------------------------------------------------ state
 
@@ -64,6 +68,8 @@ let waveT = 0, spawnT = 0, syrupT = 0, plowSpawnT = 0;
 let time = 0;
 let shakeT = 0, shakeAmp = 0;
 let scoreSubmitted = false;
+let runId = 0;
+let overTimer = 0;
 
 const potholes = [];   // { slot, x, y, stage:'fresh'|'crater', hp, age, animT, hitFlash }
 const patches = [];    // cosmetic filled spots { x, y, r, age }
@@ -74,9 +80,9 @@ const hubcapFx = [];   // hubcaps rolling away
 
 const car = {
   dist: 0, speed: 100, pause: 0, x: LANE_X[1], y: H - 130, angle: -Math.PI / 2,
-  lane: 1, seg: 0, hitCooldown: 0, bump: 0,
+  lane: 1, seg: 0, hitCooldown: 0, bump: 0, threatSlot: null, warnedSlot: null,
 };
-const plow = { active: false, y: 0 };
+const plow = { active: false, y: 0, sprayT: 0 };
 
 // car loop geometry: up the right lane, U-turn, down the left, U-turn
 const CAR_TOP = 140, CAR_BOT = H - 96, TURN_R = ROAD.laneGap / 2;
@@ -103,10 +109,13 @@ const startPanel = $('start'), overPanel = $('gameover'), hud = $('hud');
 const scoreEl = $('score'), waveEl = $('waveNum'), capsEl = $('caps'), comboEl = $('comboBadge');
 const bestEl = $('bestHud'), toastEl = $('toast');
 const finalScoreEl = $('finalScore'), bestLineEl = $('bestLine'), statLineEl = $('statLine'), overTitleEl = $('overTitle');
+const announcerEl = $('announcer'), bestShowerEl = $('bestShower');
 
 // ------------------------------------------------------------ game flow
 
 function startGame() {
+  runId++;
+  clearTimeout(overTimer);
   unlockAudio();
   sfx.click();
   state = 'playing';
@@ -118,7 +127,10 @@ function startGame() {
   potholes.length = patches.length = bonuses.length = 0;
   particles.length = floaters.length = hubcapFx.length = 0;
   car.dist = 0; car.pause = 0; car.hitCooldown = 0; car.bump = 0;
-  plow.active = false;
+  car.threatSlot = null; car.warnedSlot = null;
+  plow.active = false; plow.sprayT = 0;
+  bestShowerEl.replaceChildren();
+  announcerEl.textContent = '';
   startPanel.classList.add('hidden');
   overPanel.classList.add('hidden');
   hud.classList.remove('hidden');
@@ -140,20 +152,52 @@ function gameOver() {
   bestLineEl.classList.toggle('new-best', isBest);
   statLineEl.textContent = `${filled} pothole${filled === 1 ? '' : 's'} patched · survived to wave ${wave}`;
   overTitleEl.textContent = 'OUT OF HUBCAPS!';
-  setTimeout(() => overPanel.classList.remove('hidden'), 650);
+  const thisRun = runId;
+  overTimer = setTimeout(() => {
+    if (state !== 'over' || runId !== thisRun) return;
+    overPanel.classList.remove('hidden');
+    if (isBest) celebrateNewBest();
+  }, 650);
   updateLeaderboard(s);
 }
 
 // ------------------------------------------------------------ helpers
 
 function rand(a, b) { return a + Math.random() * (b - a); }
-function shake(amp, t) { shakeAmp = Math.max(shakeAmp, amp); shakeT = Math.max(shakeT, t); }
+function shake(amp, t) {
+  if (reducedMotion.matches) return;
+  shakeAmp = Math.max(shakeAmp, amp);
+  shakeT = Math.max(shakeT, t);
+}
+
+function announce(msg) {
+  const thisRun = runId;
+  announcerEl.textContent = '';
+  requestAnimationFrame(() => {
+    if (runId === thisRun) announcerEl.textContent = msg;
+  });
+}
 
 function toast(msg) {
   toastEl.textContent = msg;
   toastEl.classList.remove('show');
   void toastEl.offsetWidth; // restart the CSS animation
   toastEl.classList.add('show');
+}
+
+function celebrateNewBest() {
+  sfx.fanfare();
+  bestShowerEl.replaceChildren();
+  if (reducedMotion.matches) return;
+  particles.length = 0;
+  for (let i = 0; i < 24; i++) {
+    const chip = document.createElement('i');
+    chip.style.setProperty('--x', `${rand(-150, 150)}px`);
+    chip.style.setProperty('--r', `${rand(-420, 420)}deg`);
+    chip.style.setProperty('--delay', `${rand(0, 0.22)}s`);
+    chip.addEventListener('animationend', () => chip.remove(), { once: true });
+    bestShowerEl.appendChild(chip);
+  }
 }
 
 function paintHud() {
@@ -169,8 +213,8 @@ function paintHud() {
   }
 }
 
-function addFloater(x, y, text, cls = '') {
-  floaters.push({ x, y, text, cls, age: 0 });
+function addFloater(x, y, text, cls = '', life = 1.1) {
+  floaters.push({ x, y, text, cls, age: 0, life });
 }
 
 function award(points, x, y, label) {
@@ -196,7 +240,7 @@ function spawnPothole() {
   if (!free.length) return;
   const i = free[Math.floor(Math.random() * free.length)];
   const { x, y } = slotPos(SLOTS[i]);
-  potholes.push({ slot: i, x, y, stage: 'fresh', hp: 1, age: 0, animT: 0, flash: 0 });
+  potholes.push({ slot: i, x, y, stage: 'fresh', hp: 1, age: 0, animT: 0, flash: 0, warningFlash: 0 });
   sfx.pop();
   burst(x, y, 7, '#5c4326', 2.4);
 }
@@ -219,9 +263,11 @@ function fillPothole(p, byPlow = false) {
 }
 
 function bumpCombo() {
+  const prevMult = mult;
   chain = (time - lastFillAt <= COMBO_WINDOW) ? chain + 1 : 0;
   lastFillAt = time;
   mult = Math.min(1 + chain, MAX_MULT);
+  if (mult > prevMult && mult >= 3) toast(COMBO_TOASTS[mult]);
 }
 function breakCombo() {
   chain = 0; mult = 1; lastFillAt = -99;
@@ -240,6 +286,7 @@ function spawnBonus(kind) {
 function triggerPlow() {
   plow.active = true;
   plow.y = H + 80;
+  plow.sprayT = 0;
   sfx.plow();
   toast('🚜 PLOW! FILLS EVERYTHING');
 }
@@ -247,7 +294,9 @@ function triggerPlow() {
 // ------------------------------------------------------------ particles
 
 function burst(x, y, n, color, speed) {
-  for (let i = 0; i < n; i++) {
+  if (reducedMotion.matches) return;
+  const count = Math.min(n, MAX_PARTICLES - particles.length);
+  for (let i = 0; i < count; i++) {
     const a = Math.random() * Math.PI * 2, v = rand(0.4, 1) * speed * 60;
     particles.push({
       x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 40,
@@ -256,11 +305,24 @@ function burst(x, y, n, color, speed) {
   }
 }
 function steam(x, y, n) {
-  for (let i = 0; i < n; i++) {
+  if (reducedMotion.matches) return;
+  const count = Math.min(n, MAX_PARTICLES - particles.length);
+  for (let i = 0; i < count; i++) {
     particles.push({
       x: x + rand(-8, 8), y: y + rand(-4, 4),
       vx: rand(-12, 12), vy: rand(-70, -30),
       r: rand(3, 7), color: 'steam', age: 0, life: rand(0.5, 1), grav: -30,
+    });
+  }
+}
+function dustPuff(x, y) {
+  if (reducedMotion.matches) return;
+  const count = Math.min(6, MAX_PARTICLES - particles.length);
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: x + rand(-5, 5), y: y + rand(-3, 3),
+      vx: rand(-34, 34), vy: rand(-42, -16),
+      r: rand(3, 6), color: 'dust', age: 0, life: rand(0.28, 0.46), grav: 35,
     });
   }
 }
@@ -319,10 +381,12 @@ function whack(x, y) {
     paintHud();
   } else {
     // a whiff breaks your combo — aim matters
-    if (mult > 1) addFloater(x, y, 'combo lost', 'miss');
+    const hadChain = time - lastFillAt <= COMBO_WINDOW;
+    addFloater(x, y, hadChain ? 'CHAIN BROKEN' : 'MISS', 'miss', 0.6);
     breakCombo();
     sfx.whiff();
-    burst(x, y, 3, '#6b5636', 1.4);
+    dustPuff(x, y);
+    announce(hadChain ? 'Miss. Patch chain broken.' : 'Miss.');
     paintHud();
   }
 }
@@ -370,6 +434,7 @@ function update(dt) {
     p.age += dt;
     p.animT += dt;
     if (p.flash > 0) p.flash -= dt;
+    if (p.warningFlash > 0) p.warningFlash -= dt;
     if (p.stage === 'fresh' && p.age >= tune.freshLife) {
       p.stage = 'crater';
       p.hp = 2;
@@ -396,6 +461,11 @@ function update(dt) {
   // plow sweep
   if (plow.active) {
     plow.y -= 340 * dt;
+    plow.sprayT -= dt;
+    if (plow.sprayT <= 0) {
+      plow.sprayT = 0.07;
+      burst(ROAD.cx + rand(-55, 55), plow.y - 20, 2, '#5a4a30', 2.5);
+    }
     for (let i = potholes.length - 1; i >= 0; i--) {
       if (Math.abs(potholes[i].y - plow.y) < 26) fillPothole(potholes[i], true);
     }
@@ -423,6 +493,17 @@ function update(dt) {
   if (car.hitCooldown > 0) car.hitCooldown -= dt;
   if (car.bump > 0) car.bump -= dt * 3;
 
+  const threat = nearestCarThreat();
+  car.threatSlot = threat?.slot ?? null;
+  if (!threat) {
+    car.warnedSlot = null;
+  } else if (car.warnedSlot !== threat.slot) {
+    car.warnedSlot = threat.slot;
+    threat.warningFlash = 0.32;
+    sfx.carWarning();
+    announce('Open pothole ahead of the Subaru.');
+  }
+
   // car vs open potholes
   if (car.lane >= 0 && car.hitCooldown <= 0 && state === 'playing') {
     for (const p of potholes) {
@@ -434,7 +515,27 @@ function update(dt) {
     }
   }
 
-  // particles / floaters / hubcaps
+  updateEffects(dt);
+
+  if (shakeT > 0) shakeT -= dt;
+}
+
+function nearestCarThreat() {
+  if (car.lane < 0 || car.hitCooldown > 0) return null;
+  let threat = null;
+  let nearest = CAR_WARNING_DISTANCE;
+  for (const p of potholes) {
+    if (SLOTS[p.slot].lane !== car.lane) continue;
+    const ahead = car.lane === 1 ? car.y - p.y : p.y - car.y;
+    if (ahead > 24 && ahead < nearest) {
+      nearest = ahead;
+      threat = p;
+    }
+  }
+  return threat;
+}
+
+function updateEffects(dt) {
   for (const pt of particles) {
     pt.age += dt;
     pt.x += pt.vx * dt; pt.y += pt.vy * dt;
@@ -442,16 +543,18 @@ function update(dt) {
   }
   for (let i = particles.length - 1; i >= 0; i--) if (particles[i].age > particles[i].life) particles.splice(i, 1);
   for (const f of floaters) f.age += dt;
-  for (let i = floaters.length - 1; i >= 0; i--) if (floaters[i].age > 1.1) floaters.splice(i, 1);
+  for (let i = floaters.length - 1; i >= 0; i--) if (floaters[i].age > floaters[i].life) floaters.splice(i, 1);
   for (const hcap of hubcapFx) {
     hcap.age += dt;
     hcap.x += hcap.vx * dt; hcap.y += hcap.vy * dt;
-    hcap.rot += dt * 9;
-    hcap.vx *= 0.985;
+    hcap.rot += dt * Math.abs(hcap.vx) / 6;
+    hcap.vx *= Math.exp(-0.35 * dt);
+    hcap.vy *= Math.exp(-0.7 * dt);
   }
-  for (let i = hubcapFx.length - 1; i >= 0; i--) if (hubcapFx[i].age > 1.6) hubcapFx.splice(i, 1);
-
-  if (shakeT > 0) shakeT -= dt;
+  for (let i = hubcapFx.length - 1; i >= 0; i--) {
+    const hcap = hubcapFx[i];
+    if (hcap.x < -16 || hcap.x > W + 16 || hcap.age > 2.4) hubcapFx.splice(i, 1);
+  }
 }
 
 function carHit(p) {
@@ -465,7 +568,14 @@ function carHit(p) {
   shake(9, 0.35);
   addFloater(car.x, car.y - 40, '-1 🛞', 'ouch');
   const dir = SLOTS[p.slot].lane === 0 ? -1 : 1;
-  hubcapFx.push({ x: car.x + dir * 16, y: car.y, vx: dir * rand(90, 150), vy: rand(-30, 20), rot: 0, age: 0 });
+  if (!reducedMotion.matches) {
+    const forward = car.lane === 1 ? -1 : 1;
+    hubcapFx.push({
+      x: car.x + dir * 18, y: car.y,
+      vx: dir * rand(390, 440), vy: forward * rand(35, 70), rot: 0, age: 0,
+    });
+  }
+  announce(`The Subaru lost a hubcap. ${hubcaps} remaining.`);
   paintHud();
   if (hubcaps <= 0) gameOver();
 }
@@ -482,6 +592,7 @@ function draw() {
   }
 
   drawBase(ctx, baseScale);
+  drawHeadlights();
 
   // cured patches
   for (const p of patches) {
@@ -511,14 +622,12 @@ function drawPothole(p) {
   const grow = Math.min(p.animT / 0.14, 1);
   const pulse = 1 + Math.sin(time * 5 + p.slot) * 0.03;
   const r = (p.stage === 'crater' ? 27 : 17) * grow * pulse;
-  const danger = car.lane >= 0 && SLOTS[p.slot].lane === car.lane &&
-    ((car.lane === 1 && p.y < car.y && car.y - p.y < 170) ||
-     (car.lane === 0 && p.y > car.y && p.y - car.y < 170));
+  const danger = p.slot === car.threatSlot;
 
   // warning ring when the Subaru is bearing down on it
   if (danger) {
-    const ph = (time * 2.2) % 1;
-    ctx.globalAlpha = 0.65 * (1 - ph);
+    const ph = reducedMotion.matches ? 0.2 : (time * 2.2) % 1;
+    ctx.globalAlpha = reducedMotion.matches ? 0.6 : 0.65 * (1 - ph);
     ctx.strokeStyle = '#ff5638';
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.ellipse(p.x, p.y, r + 6 + ph * 14, (r + 6 + ph * 14) * 0.85, 0, 0, 7); ctx.stroke();
@@ -559,6 +668,32 @@ function drawPothole(p) {
     ctx.beginPath(); ctx.ellipse(p.x, p.y, r + 4, (r + 4) * 0.85, 0, 0, 7); ctx.fill();
     ctx.globalAlpha = 1;
   }
+  if (p.warningFlash > 0) {
+    ctx.globalAlpha = Math.min(0.7, p.warningFlash * 2.2);
+    ctx.fillStyle = '#ffd76a';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, r + 8, (r + 8) * 0.85, 0, 0, 7); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawHeadlights() {
+  if (state === 'menu') return;
+  ctx.save();
+  ctx.translate(car.x, car.y);
+  ctx.rotate(car.angle + Math.PI / 2);
+  ctx.globalCompositeOperation = 'screen';
+  const glow = ctx.createLinearGradient(0, -28, 0, -155);
+  glow.addColorStop(0, car.threatSlot == null ? 'rgba(255,241,177,0.18)' : 'rgba(255,222,112,0.3)');
+  glow.addColorStop(1, 'rgba(255,231,150,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.moveTo(-13, -27);
+  ctx.lineTo(-58, -155);
+  ctx.lineTo(58, -155);
+  ctx.lineTo(13, -27);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawBonus(b) {
@@ -603,8 +738,6 @@ function drawPlow() {
   ctx.fillStyle = Math.floor(time * 8) % 2 ? '#ffd24a' : '#ff9c2e';
   ctx.fillRect(-20, 34, 8, 6); ctx.fillRect(12, 34, 8, 6);
   ctx.restore();
-  // spray behind the blade
-  if (Math.random() < 0.7) burst(ROAD.cx + rand(-55, 55), plow.y - 20, 2, '#5a4a30', 2.5);
 }
 
 function drawCar() {
@@ -662,9 +795,7 @@ function drawCar() {
 }
 
 function drawHubcap(h) {
-  const alpha = h.age > 1.1 ? 1 - (h.age - 1.1) / 0.5 : 1;
   ctx.save();
-  ctx.globalAlpha = alpha;
   ctx.translate(h.x, h.y);
   ctx.rotate(h.rot);
   ctx.fillStyle = '#c9ccd2';
@@ -679,9 +810,9 @@ function drawHubcap(h) {
 function drawParticles() {
   for (const p of particles) {
     const t = p.age / p.life;
-    if (p.color === 'steam') {
+    if (p.color === 'steam' || p.color === 'dust') {
       ctx.globalAlpha = 0.35 * (1 - t);
-      ctx.fillStyle = '#e8ebe8';
+      ctx.fillStyle = p.color === 'steam' ? '#e8ebe8' : '#aa9168';
       ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (1 + t * 1.6), 0, 7); ctx.fill();
     } else {
       ctx.globalAlpha = 1 - t;
@@ -694,7 +825,7 @@ function drawParticles() {
 
 function drawFloaters() {
   for (const f of floaters) {
-    const t = f.age / 1.1;
+    const t = f.age / f.life;
     ctx.globalAlpha = 1 - t * t;
     ctx.font = f.cls === 'wavepts' ? '800 22px system-ui' : '800 17px system-ui';
     ctx.textAlign = 'center';
@@ -712,10 +843,21 @@ function drawFloaters() {
 
 let last = performance.now();
 function frame(now) {
+  if (document.hidden) {
+    last = now;
+    requestAnimationFrame(frame);
+    return;
+  }
   const dt = Math.min((now - last) / 1000, 0.045);
   last = now;
   if (state === 'playing') update(dt);
-  else time += dt; // keep ambient motion on menus
+  else {
+    time += dt; // keep ambient motion on menus
+    if (state === 'over') {
+      updateEffects(dt);
+      if (shakeT > 0) shakeT -= dt;
+    }
+  }
   draw();
   requestAnimationFrame(frame);
 }

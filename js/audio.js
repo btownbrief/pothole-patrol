@@ -76,8 +76,9 @@ export const sfx = {
   },
   // slap of hot asphalt + steam hiss
   splat(mult = 1) {
+    const lift = Math.min(Math.max(mult, 1), 5);
     noise({ t: 0.09, vol: 0.32, freq: 900, sweepTo: 200 });
-    tone({ type: 'sine', f0: 120, f1: 55, t: 0.12, vol: 0.26 });
+    tone({ type: 'sine', f0: 105 + lift * 15, f1: 48 + lift * 7, t: 0.12, vol: 0.26 });
     noise({ t: 0.4, vol: 0.1, delay: 0.06, freq: 5200, type: 'highpass' });
     if (mult > 1) { // combo sparkle rises with the multiplier
       const notes = [523, 659, 784, 1046, 1318];
@@ -89,7 +90,17 @@ export const sfx = {
     noise({ t: 0.07, vol: 0.22, freq: 700, sweepTo: 180 });
     tone({ type: 'sine', f0: 100, f1: 60, t: 0.09, vol: 0.18 });
   },
-  whiff() { noise({ t: 0.05, vol: 0.07, freq: 2000, type: 'highpass' }); },
+  whiff() {
+    tone({ type: 'sine', f0: 72, f1: 48, t: 0.09, vol: 0.09 });
+    noise({ t: 0.06, vol: 0.045, freq: 240, type: 'lowpass' });
+  },
+
+  // a short horn and road rumble when an open hole enters the car's path
+  carWarning() {
+    tone({ type: 'triangle', f0: 330, f1: 300, t: 0.13, vol: 0.11 });
+    tone({ type: 'triangle', f0: 392, f1: 350, t: 0.12, vol: 0.09, delay: 0.14 });
+    noise({ t: 0.32, vol: 0.055, freq: 110, type: 'lowpass' });
+  },
 
   // the Outback slams a hole
   thunk() {
@@ -121,5 +132,11 @@ export const sfx = {
     tone({ type: 'sawtooth', f0: 220, f1: 110, t: 0.55, vol: 0.16 });
     tone({ type: 'sawtooth', f0: 165, f1: 82, t: 0.7, vol: 0.14, delay: 0.18 });
     tone({ type: 'sine', f0: 55, f1: 40, t: 0.9, vol: 0.2, delay: 0.3 });
+  },
+  fanfare() {
+    [523, 659, 784, 1046].forEach((f, i) => {
+      tone({ type: 'triangle', f0: f, t: i === 3 ? 0.42 : 0.18, vol: 0.13, delay: i * 0.11 });
+    });
+    noise({ t: 0.32, vol: 0.055, delay: 0.3, freq: 4200, type: 'highpass' });
   },
 };

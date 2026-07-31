@@ -30,7 +30,8 @@
     <div class="badge caps"><small>HUBCAPS</small><span id="caps">🛞🛞🛞</span></div>
   </div>
   <div id="comboBadge" class="hidden">x2 COMBO</div>
-  <div id="toast"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <div id="announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <button id="mute" aria-label="Toggle sound">🔊</button>
 
   <!-- Title screen -->
@@ -51,6 +52,7 @@
 
   <!-- Game over -->
   <div id="gameover" class="panel hidden">
+    <div id="bestShower" aria-hidden="true"></div>
     <h1 class="over-h1" id="overTitle">OUT OF HUBCAPS!</h1>
     <div class="over-sub">The Outback limps off toward the Beltline…</div>
     <div class="score-big" id="finalScore">0</div>
