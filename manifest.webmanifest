@@ -1,0 +1,22 @@
+{
+  "name": "Pothole Patrol",
+  "short_name": "Pothole Patrol",
+  "description": "Pothole Patrol. A Btown Games production.",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#241d15",
+  "theme_color": "#241d15",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
